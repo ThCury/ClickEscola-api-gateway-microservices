@@ -1,0 +1,41 @@
+```mermaid
+flowchart TD
+    Client["Cliente<br/>browser / curl / Postman"]
+
+    subgraph Docker["Docker Network"]
+        Gateway["API Gateway — Nginx<br/>Ponto unico de entrada<br/>• Roteamento<br/>• Logs + tempo de resposta<br/>• Rate limiting<br/>• Tratamento de erro<br/>• X-Request-ID"]
+
+        subgraph Services["Microsservicos (FastAPI)"]
+            Alunos["Servico de Alunos<br/>REST /api/alunos"]
+            Cursos["Servico de Cursos<br/>REST /api/cursos"]
+        end
+
+        subgraph DB["Cassandra (cluster)"]
+            KSA[("alunos_ks")]
+            KSC[("cursos_ks")]
+        end
+
+        Dozzle["Dozzle<br/>Logs em tempo real"]
+    end
+
+    Client -->|HTTP| Gateway
+    Gateway -->|"/api/alunos/"| Alunos
+    Gateway -->|"/api/cursos/"| Cursos
+    Alunos --> KSA
+    Cursos --> KSC
+    Dozzle -.observa logs.-> Gateway
+    Dozzle -.observa logs.-> Alunos
+    Dozzle -.observa logs.-> Cursos
+
+    classDef gw fill:#2563eb,stroke:#1e40af,color:#fff
+    classDef svc fill:#16a34a,stroke:#15803d,color:#fff
+    classDef db fill:#9333ea,stroke:#7e22ce,color:#fff
+    classDef obs fill:#ea580c,stroke:#c2410c,color:#fff
+    classDef ext fill:#475569,stroke:#334155,color:#fff
+
+    class Gateway gw
+    class Alunos,Cursos svc
+    class KSA,KSC db
+    class Dozzle obs
+    class Client ext
+```

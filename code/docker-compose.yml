@@ -1,0 +1,101 @@
+# Plataforma Acadêmica — API Gateway + Microsserviços
+# Regra de ouro: apenas o gateway (Nginx) e o Dozzle expõem portas para o host.
+# Os serviços de aplicação só são acessíveis dentro da rede Docker "backend".
+
+services:
+  # ---------- Fundação: banco de dados ----------
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    healthcheck:
+      # Cassandra demora para aceitar conexões; só fica "healthy" quando o CQL responde.
+      test: ["CMD-SHELL", "cqlsh -e 'describe keyspaces' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    networks:
+      - backend
+
+  # Container efêmero que carrega o schema e morre. Roda uma única vez.
+  cassandra-init:
+    image: cassandra:4.1
+    container_name: cassandra-init
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    volumes:
+      - ./cassandra/init.cql:/init.cql:ro
+    command: ["cqlsh", "cassandra", "-f", "/init.cql"]
+    restart: "no"
+    networks:
+      - backend
+
+  # ---------- Serviço de Alunos (FastAPI) ----------
+  service-alunos:
+    build: ./service-alunos
+    container_name: service-alunos
+    environment:
+      CASSANDRA_HOSTS: cassandra
+      CASSANDRA_PORT: "9042"
+      CASSANDRA_KEYSPACE: alunos_ks
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      cassandra-init:
+        condition: service_completed_successfully
+    networks:
+      - backend
+    # Sem "ports": acesso apenas interno (porta 8000 na rede Docker).
+
+  # ---------- Serviço de Cursos (NestJS) ----------
+  service-cursos:
+    build: ./service-cursos
+    container_name: service-cursos
+    environment:
+      CASSANDRA_HOSTS: cassandra
+      CASSANDRA_PORT: "9042"
+      CASSANDRA_KEYSPACE: cursos_ks
+      CASSANDRA_DC: datacenter1
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      cassandra-init:
+        condition: service_completed_successfully
+    networks:
+      - backend
+    # Sem "ports": acesso apenas interno (porta 3000 na rede Docker).
+
+  # ---------- API Gateway (Nginx) ----------
+  gateway:
+    image: nginx:1.27-alpine
+    container_name: gateway
+    ports:
+      - "8080:80" # ÚNICO ponto de entrada para o cliente.
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - service-alunos
+      - service-cursos
+    networks:
+      - backend
+
+  # ---------- Observabilidade: logs em tempo real ----------
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    ports:
+      - "9999:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  cassandra_data:

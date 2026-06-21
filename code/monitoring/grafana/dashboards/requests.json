@@ -1,0 +1,166 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Requisições (total)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "fixed", "fixedColor": "text" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "area", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "queryType": "instant",
+          "expr": "sum(count_over_time({container=~\"service-alunos|service-cursos\"} | json | evt=\"trace\" [$__range]))" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Via Gateway",
+      "description": "Traces com gateway_to_service_ms preenchido (vieram pelo Nginx).",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "queryType": "instant",
+          "expr": "sum(count_over_time({container=~\"service-alunos|service-cursos\"} | json | evt=\"trace\" | gateway_to_service_ms!=\"\" [$__range]))" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Acesso direto",
+      "description": "Traces sem gateway_to_service_ms (não passaram pelo gateway).",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "fixed", "fixedColor": "green" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "queryType": "instant",
+          "expr": "sum(count_over_time({container=~\"service-alunos|service-cursos\"} | json | evt=\"trace\" | gateway_to_service_ms=\"\" [$__range]))" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Latência média via gateway (ms)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "ms", "decimals": 2, "color": { "mode": "fixed", "fixedColor": "orange" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "queryType": "instant",
+          "expr": "avg(avg_over_time({container=~\"service-alunos|service-cursos\"} | json | evt=\"trace\" | gateway_to_service_ms!=\"\" | unwrap total_ms [$__range]))" }
+      ]
+    },
+
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "🌐 Tempo das requisições — VIA GATEWAY (ms)",
+      "description": "Latência total (gateway → serviço → resposta) das requisições que passaram pelo Nginx.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 12, "showPoints": "auto", "spanNulls": true },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "legendFormat": "{{service}} · p95",
+          "expr": "quantile_over_time(0.95, {container=~\"service-alunos|service-cursos\"} | json | evt=\"trace\" | gateway_to_service_ms!=\"\" | unwrap total_ms [1m]) by (service)" },
+        { "refId": "B", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "legendFormat": "{{service}} · média",
+          "expr": "avg_over_time({container=~\"service-alunos|service-cursos\"} | json | evt=\"trace\" | gateway_to_service_ms!=\"\" | unwrap total_ms [1m]) by (service)" }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "➡️ Tempo das requisições — ACESSO DIRETO (ms)",
+      "description": "Tempo dentro do serviço quando a requisição NÃO passa pelo gateway (sem o hop extra).",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 12, "showPoints": "auto", "spanNulls": true },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "legendFormat": "{{service}} · p95",
+          "expr": "quantile_over_time(0.95, {container=~\"service-alunos|service-cursos\"} | json | evt=\"trace\" | gateway_to_service_ms=\"\" | unwrap service_ms [1m]) by (service)" },
+        { "refId": "B", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "legendFormat": "{{service}} · média",
+          "expr": "avg_over_time({container=~\"service-alunos|service-cursos\"} | json | evt=\"trace\" | gateway_to_service_ms=\"\" | unwrap service_ms [1m]) by (service)" }
+      ]
+    },
+
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Requisições (tracing) — detalhe por requisição",
+      "description": "Como na tela do admin: hora, serviço, método, rota, status e tempos. GW→Svc vazio = acesso direto.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 13 },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left", "filterable": true } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "GW→Svc (ms)" }, "properties": [ { "id": "custom.align", "value": "right" } ] },
+          { "matcher": { "id": "byName", "options": "No svc (ms)" }, "properties": [ { "id": "custom.align", "value": "right" } ] },
+          { "matcher": { "id": "byName", "options": "Total (ms)" }, "properties": [ { "id": "custom.align", "value": "right" } ] }
+        ]
+      },
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "queryType": "range", "maxLines": 200,
+          "expr": "{container=~\"service-alunos|service-cursos\"} | json | evt=\"trace\"" }
+      ],
+      "transformations": [
+        { "id": "extractFields", "options": { "source": "labels", "format": "auto", "replace": false } },
+        { "id": "organize", "options": {
+            "excludeByName": { "Time": true, "Line": true, "labels": true, "tsNs": true, "id": true, "evt": true, "route": true, "container": true, "request_id": false },
+            "indexByName": {
+              "service_received_local": 0, "service": 1, "method": 2, "path": 3, "status": 4,
+              "gateway_to_service_ms": 5, "service_ms": 6, "total_ms": 7, "request_id": 8
+            },
+            "renameByName": {
+              "service_received_local": "Hora",
+              "service": "Serviço",
+              "method": "Método",
+              "path": "Rota",
+              "status": "Status",
+              "gateway_to_service_ms": "GW→Svc (ms)",
+              "service_ms": "No svc (ms)",
+              "total_ms": "Total (ms)",
+              "request_id": "request_id"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["clickescola"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "ClickEscola — Requisições (Gateway × Direto)",
+  "uid": "clickescola-requests",
+  "version": 1,
+  "weekStart": ""
+}

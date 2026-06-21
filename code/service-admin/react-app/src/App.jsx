@@ -370,7 +370,7 @@ export default class ClickEscola extends React.Component {
             rps: d.rps,
             total: d.total_requests,
             ok: d.ok,
-            blocked: d.rate_limited_503,
+            blocked: d.rate_limited,
           },
         })
         this.refresh()
@@ -569,7 +569,7 @@ export default class ClickEscola extends React.Component {
       },
       openGrafana: () => {
         const u = S.config && S.config.grafana
-        if (u) window.open(u, '_blank', 'noopener')
+        if (u) window.open(u.replace(/\/$/, '') + '/d/clickescola-requests', '_blank', 'noopener')
       },
       openDozzle: () => {
         const u = S.config && S.config.dozzle
@@ -897,7 +897,7 @@ export default class ClickEscola extends React.Component {
               <div style={css('display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:22px;')}>
                 <section style={css(card)}>
                   <div style={css(cardHead)}>
-                    <h2 style={css(h2)}>Barradas por rate limit (503)</h2>
+                    <h2 style={css(h2)}>Barradas por rate limit (429)</h2>
                     <span style={css(hint)}>limite: 10 req/s</span>
                     <div style={{ flex: 1 }} />
                     <span style={css('font-size:13px;color:var(--muted);')}>total: <b style={css("color:var(--red);font-family:'IBM Plex Mono',monospace;")}>{v.rlChart.total}</b></span>
@@ -1174,12 +1174,12 @@ export default class ClickEscola extends React.Component {
                     <div style={css('background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 18px;')}>
                       <b style={css('font-size:13.5px;')}>Onde acompanhar:</b>
                       <ul style={css('margin:10px 0 0;padding-left:20px;color:var(--muted);')}>
-                        <li style={css('margin:5px 0;')}>Os <b style={css('color:var(--txt);')}>gráficos</b> sobem ao vivo (gateway, serviços e 503).</li>
+                        <li style={css('margin:5px 0;')}>Os <b style={css('color:var(--txt);')}>gráficos</b> sobem ao vivo (gateway, serviços e 429).</li>
                         <li style={css('margin:5px 0;')}>A <b style={css('color:var(--txt);')}>tabela de roteamento</b> enche com os tempos em ms.</li>
                         <li style={css('margin:5px 0;')}>No <b style={css('color:var(--txt);')}>Dozzle</b> você vê os logs crus de cada container.</li>
                       </ul>
                     </div>
-                    <p style={css('color:var(--muted);font-size:12.5px;margin:14px 0 0;')}>O gateway limita a 10 req/s — alguns <b>503</b> aparecem, demonstrando o rate limit sob carga.</p>
+                    <p style={css('color:var(--muted);font-size:12.5px;margin:14px 0 0;')}>O gateway limita a 10 req/s — alguns <b>429</b> aparecem, demonstrando o rate limit sob carga.</p>
                   </>
                 )}
                 {v.loadRunning && (
@@ -1194,7 +1194,7 @@ export default class ClickEscola extends React.Component {
                     <div style={css('display:flex;gap:12px;flex-wrap:wrap;')}>
                       <div style={css('flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;')}><div style={css('font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;')}>{v.loadResult.total}</div><div style={css('font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;')}>requisições</div></div>
                       <div style={css('flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;')}><div style={css('font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--green);')}>{v.loadResult.ok}</div><div style={css('font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;')}>sucesso 2xx</div></div>
-                      <div style={css('flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;')}><div style={css('font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--red);')}>{v.loadResult.blocked}</div><div style={css('font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;')}>503 rate-limit</div></div>
+                      <div style={css('flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;')}><div style={css('font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--red);')}>{v.loadResult.blocked}</div><div style={css('font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;')}>429 rate-limit</div></div>
                     </div>
                   </>
                 )}

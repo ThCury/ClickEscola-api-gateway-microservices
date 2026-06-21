@@ -15,13 +15,24 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from statistics import mean
+from zoneinfo import ZoneInfo
 
 import httpx
 from cassandra.cluster import Cluster
+from cassandra.util import uuid_from_time
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+
+TZ_BH = ZoneInfo("America/Sao_Paulo")  # fuso de Belo Horizonte (exibição)
+
+
+def _local_str(epoch: float) -> str:
+    """Instante no fuso de Belo Horizonte: 'YYYY-MM-DD HH:MM:SS.mmm'."""
+    dt = datetime.fromtimestamp(epoch, TZ_BH)
+    return dt.strftime("%Y-%m-%d %H:%M:%S.") + f"{dt.microsecond // 1000:03d}"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [admin] %(message)s")
 logger = logging.getLogger("service-admin")
@@ -95,8 +106,52 @@ async def lifespan(app: FastAPI):
     db["count_service"] = session.prepare(
         "SELECT COUNT(*) FROM request_traces WHERE bucket = 'all' AND service = ? ALLOW FILTERING"
     )
+    # Insert para registrar requisições que falharam NO gateway (não chegam ao
+    # serviço, então nenhum serviço as rastreia). O admin grava o trace aqui.
+    db["trace_insert"] = session.prepare(
+        "INSERT INTO request_traces "
+        "(bucket, id, request_id, service, method, route, path, status, "
+        "gateway_received, service_received, service_received_local, service_completed, "
+        "gateway_to_service_ms, service_ms, total_ms) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
     yield
     cluster.shutdown()
+
+
+def _record_gateway_failure(service: str, method: str, status: int,
+                            total_ms: float, request_id: str) -> None:
+    """Grava no tracing_ks uma requisição barrada/falha no gateway (429/503/erro).
+
+    Esses casos NÃO chegam ao serviço, então não há trace gerado por ele —
+    sem isto, a requisição sumiria da tabela de roteamento. gateway→serviço e
+    o tempo no serviço ficam nulos (a requisição nunca chegou lá).
+    """
+    sess, ins = db.get("session"), db.get("trace_insert")
+    if sess is None or ins is None:
+        return
+    now = time.time()
+    route = f"/api/{service}"
+    try:
+        sess.execute_async(ins, (
+            "all",
+            uuid_from_time(now),
+            request_id or "",
+            service,
+            method,
+            route,
+            route,
+            status,
+            datetime.fromtimestamp(now, timezone.utc),  # gateway_received (aprox.)
+            None,                                        # service_received (nunca chegou)
+            _local_str(now),                             # hora (para exibir na tabela)
+            None,                                        # service_completed
+            None,                                        # gateway_to_service_ms
+            None,                                        # service_ms
+            round(total_ms, 3),                          # total_ms medido pelo admin
+        ))
+    except Exception as err:  # noqa: BLE001 — registro de trace nunca derruba o teste
+        logger.warning("Falha ao registrar trace de falha do gateway: %s", err)
 
 
 app = FastAPI(title="Serviço de Admin", version="1.0.0", lifespan=lifespan)
@@ -224,7 +279,7 @@ async def loadtest(get: int = 100, post: int = 50, rate: float = 12.0):
 
     O ritmo mantém a carga perto do limite do gateway (10 req/s): a maioria das
     requisições chega aos serviços (e popula os dashboards ao vivo), mas alguns
-    503 ainda aparecem demonstrando o rate limit sob carga.
+    429 ainda aparecem demonstrando o rate limit sob carga.
     """
     get = max(0, min(get, 500))
     post = max(0, min(post, 500))
@@ -247,19 +302,28 @@ async def loadtest(get: int = 100, post: int = 50, rate: float = 12.0):
     async with httpx.AsyncClient() as client:
         async def one(name: str, method: str):
             cfg = SERVICES[name]
+            rid = ""
+            t0 = time.perf_counter()
             async with sem:
                 try:
                     if method == "GET":
-                        code = (await client.get(cfg["gateway"], timeout=10.0)).status_code
+                        r = await client.get(cfg["gateway"], timeout=10.0)
                     else:
-                        code = (await client.post(cfg["gateway"], json=cfg["post_body"], timeout=10.0)).status_code
+                        r = await client.post(cfg["gateway"], json=cfg["post_body"], timeout=10.0)
+                    code = r.status_code
+                    rid = r.headers.get("x-request-id", "")
                 except Exception:  # noqa: BLE001
                     code = 0
+            dt_ms = (time.perf_counter() - t0) * 1000.0
             res = results[name]
             res[method.lower()] += 1
             res["by_status"][str(code)] = res["by_status"].get(str(code), 0) + 1
             if 200 <= code < 400:
                 res["ok"] += 1
+            # Falhou NO gateway (rate limit / serviço fora / erro)? Registra o trace,
+            # pois nenhum serviço o fez (a requisição não chegou lá).
+            if code in (0, 429, 502, 503, 504):
+                _record_gateway_failure(name, method, code, dt_ms, rid)
 
         tasks = []
         for name, method in combined:
@@ -274,10 +338,11 @@ async def loadtest(get: int = 100, post: int = 50, rate: float = 12.0):
         "duration_s": round(dur, 2),
         "total_requests": total,
         "ok": ok,
-        "rate_limited_503": sum(s["by_status"].get("503", 0) for s in results.values()),
+        "rate_limited": sum(s["by_status"].get("429", 0) for s in results.values()),
+        "service_unavailable": sum(s["by_status"].get("503", 0) for s in results.values()),
         "rps": round(total / dur, 1) if dur > 0 else None,
         "by_service": results,
-        "nota": "Ritmo ~%g req/s. 503 = rate limit do gateway (10 req/s) sob carga." % rate,
+        "nota": "Ritmo ~%g req/s. 429 = rate limit do gateway (10 req/s) sob carga." % rate,
     }
 
 
@@ -311,8 +376,8 @@ async def metrics(window_s: int = 300, step_s: int = 10):
 
     • latency  -> média gateway→serviço e no serviço, POR serviço (lido do Cassandra).
     • series   -> séries temporais (passo de `step_s`, padrão 10s) das requisições
-                  recebidas pelo gateway, alunos e cursos + quantas o gateway barrou
-                  por rate limit (503). Fonte: Loki (logs do Nginx e dos serviços).
+                  recebidas pelo gateway, alunos e cursos + barradas por rate limit
+                  (429) + tratadas como serviço indisponível (503). Fonte: Loki.
     """
     step_s = max(5, min(step_s, 60))
     window_s = max(60, min(window_s, 1800))
@@ -351,15 +416,18 @@ async def metrics(window_s: int = 300, step_s: int = 10):
     queries = {
         # Tudo o que chegou ao gateway nas rotas /api/* (forwardado OU barrado).
         "gateway": f'sum(count_over_time({{container="gateway"}} | json | uri=~"/api/.*"[{step_s}s]))',
-        # Barradas pelo rate limit: 503 é label de baixa cardinalidade no gateway.
-        "rate_limited": f'sum(count_over_time({{container="gateway",status="503"}}[{step_s}s]))',
+        # Barradas pelo rate limit: o gateway responde 429 (Too Many Requests).
+        "rate_limited": f'sum(count_over_time({{container="gateway",status="429"}}[{step_s}s]))',
+        # Erros de "serviço indisponível" tratados pelo gateway (503).
+        "service_unavailable": f'sum(count_over_time({{container="gateway",status="503"}}[{step_s}s]))',
         # Linhas de trace = requisições que de fato chegaram a cada serviço.
         "alunos": f'sum(count_over_time({{service="alunos"}}[{step_s}s]))',
         "cursos": f'sum(count_over_time({{service="cursos"}}[{step_s}s]))',
     }
+    keys = ("gateway", "alunos", "cursos", "rate_limited", "service_unavailable")
 
     series = {"step_s": step_s, "buckets": buckets,
-              "gateway": [], "alunos": [], "cursos": [], "rate_limited": []}
+              "gateway": [], "alunos": [], "cursos": [], "rate_limited": [], "service_unavailable": []}
     loki_ok = True
     try:
         async with httpx.AsyncClient() as client:
@@ -367,12 +435,12 @@ async def metrics(window_s: int = 300, step_s: int = 10):
                 *[_loki_series(client, q, start, end, step_s) for q in queries.values()]
             )
         data = dict(zip(queries.keys(), results))
-        for key in ("gateway", "alunos", "cursos", "rate_limited"):
+        for key in keys:
             series[key] = [int(data[key].get(b, 0)) for b in buckets]
     except Exception as err:  # noqa: BLE001 — Loki indisponível não pode derrubar o painel
         logger.warning("Falha ao consultar o Loki: %s", err)
         loki_ok = False
-        for key in ("gateway", "alunos", "cursos", "rate_limited"):
+        for key in keys:
             series[key] = [0 for _ in buckets]
 
     return {"latency": latency, "series": series, "loki_ok": loki_ok}

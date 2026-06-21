@@ -1,0 +1,162 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Erros (total)",
+      "description": "Respostas com status >= 400 vistas pelo gateway na janela.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "fixed", "fixedColor": "red" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "queryType": "instant",
+          "expr": "sum(count_over_time({container=\"gateway\", status=~\"4..|5..\"} [$__range]))" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "429 · Rate limit",
+      "description": "Requisições barradas pelo rate limit do gateway.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "fixed", "fixedColor": "orange" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "queryType": "instant",
+          "expr": "sum(count_over_time({container=\"gateway\", status=\"429\"} [$__range]))" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "5xx · Servidor / serviço fora",
+      "description": "502/503/504 — serviço indisponível tratado pelo gateway.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "fixed", "fixedColor": "red" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "queryType": "instant",
+          "expr": "sum(count_over_time({container=\"gateway\", status=~\"5..\"} [$__range]))" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "4xx · Cliente",
+      "description": "Erros de cliente (404 não encontrado, 400/422 validação, etc.).",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "none", "color": { "mode": "fixed", "fixedColor": "yellow" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "queryType": "instant",
+          "expr": "sum(count_over_time({container=\"gateway\", status=~\"4..\"} [$__range]))" }
+      ]
+    },
+
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Erros ao longo do tempo (por status)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "bars", "fillOpacity": 70, "lineWidth": 1, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "legendFormat": "{{status}}",
+          "expr": "sum by (status) (count_over_time({container=\"gateway\", status=~\"4..|5..\"} [1m]))" }
+      ]
+    },
+
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Erros — detalhe e rastreabilidade",
+      "description": "Somente respostas de erro (>= 400) do gateway: status, rota, request_id (correlação ponta a ponta), tempos e upstream.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 13, "w": 24, "x": 0, "y": 11 },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left", "filterable": true } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "custom.width", "value": 200 },
+              { "id": "mappings", "value": [
+                { "type": "value", "options": {
+                  "429": { "text": "429 · Rate limit", "color": "orange", "index": 0 },
+                  "503": { "text": "503 · Serviço indisponível", "color": "red", "index": 1 },
+                  "502": { "text": "502 · Bad gateway", "color": "red", "index": 2 },
+                  "504": { "text": "504 · Timeout", "color": "red", "index": 3 },
+                  "404": { "text": "404 · Não encontrado", "color": "yellow", "index": 4 },
+                  "400": { "text": "400 · Requisição inválida", "color": "yellow", "index": 5 },
+                  "422": { "text": "422 · Validação", "color": "yellow", "index": 6 }
+                } }
+              ] }
+            ]
+          },
+          { "matcher": { "id": "byName", "options": "Tempo (s)" }, "properties": [ { "id": "custom.align", "value": "right" } ] },
+          { "matcher": { "id": "byName", "options": "Upstream (s)" }, "properties": [ { "id": "custom.align", "value": "right" } ] }
+        ]
+      },
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "queryType": "range", "maxLines": 300,
+          "expr": "{container=\"gateway\", status=~\"4..|5..\"} | json" }
+      ],
+      "transformations": [
+        { "id": "extractFields", "options": { "source": "labels", "format": "auto", "replace": false } },
+        { "id": "organize", "options": {
+            "excludeByName": {
+              "Line": true, "labels": true, "tsNs": true, "id": true, "container": true,
+              "time": true, "filename": true, "level": true, "detected_level": true, "remote_addr": false
+            },
+            "indexByName": {
+              "Time": 0, "status": 1, "method": 2, "uri": 3, "request_id": 4,
+              "upstream_response_time": 5, "request_time": 6, "upstream_addr": 7, "remote_addr": 8
+            },
+            "renameByName": {
+              "Time": "Hora",
+              "status": "Status",
+              "method": "Método",
+              "uri": "Rota",
+              "request_id": "request_id (correlação)",
+              "upstream_response_time": "Upstream (s)",
+              "request_time": "Tempo (s)",
+              "upstream_addr": "Upstream",
+              "remote_addr": "IP cliente"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["clickescola", "erros"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "ClickEscola — Rastreabilidade de Erros",
+  "uid": "clickescola-errors",
+  "version": 1,
+  "weekStart": ""
+}

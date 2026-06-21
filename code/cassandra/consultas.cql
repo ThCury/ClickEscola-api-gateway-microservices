@@ -74,7 +74,7 @@ SELECT nome, carga_horaria FROM cursos WHERE carga_horaria > 40 ALLOW FILTERING;
 --    PRIMARY KEY (bucket, id) com CLUSTERING ORDER BY (id DESC).
 --    bucket é fixo em 'all'; id é um timeuuid (mais recente primeiro).
 --    TTL de 1h: linhas antigas somem sozinhas (default_time_to_live = 3600).
---    OBS.: o 503 barrado por rate limit NÃO aparece aqui (ele morre no
+--    OBS.: o 429 barrado por rate limit NÃO aparece aqui (ele morre no
 --          gateway e nunca chega ao serviço) — veja isso no Loki/Grafana.
 -- =====================================================================
 USE tracing_ks;
@@ -121,14 +121,16 @@ WHERE bucket = 'all' AND request_id = 'COLE_AQUI_O_REQUEST_ID' ALLOW FILTERING;
 -- =====================================================================
 -- 4) DICA EXTRA — métricas que o Cassandra NÃO tem (use o Loki/Grafana)
 -- =====================================================================
--- As contagens "recebidas pelo gateway" e "barradas por rate limit (503)"
+-- As contagens "recebidas pelo gateway" e "barradas por rate limit (429)"
 -- são derivadas dos LOGS do Nginx via Loki (o dashboard do painel já faz
 -- isso por você). Exemplos de LogQL para rodar no Grafana (datasource Loki):
 --
 --   # Requisições /api/* que chegaram ao gateway (por 10s):
 --   sum(count_over_time({container="gateway"} | json | uri=~"/api/.*"[10s]))
 --
---   # Requisições barradas por rate limit (503) (por 10s):
+--   # Requisições barradas por rate limit (429) (por 10s):
+--   sum(count_over_time({container="gateway", status="429"}[10s]))
+--   # Requisições com serviço indisponível tratadas pelo gateway (503):
 --   sum(count_over_time({container="gateway", status="503"}[10s]))
 --
 --   # Recebidas por cada serviço (linhas de trace, por 10s):

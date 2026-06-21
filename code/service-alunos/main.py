@@ -99,6 +99,10 @@ async def lifespan(app: FastAPI):
     db["delete"] = session.prepare(
         "DELETE FROM alunos WHERE id = ?"
     )
+    # Contador persistente (sem TTL): total histórico por escopo.
+    db["count_incr"] = session.prepare(
+        "UPDATE tracing_ks.request_counters SET total = total + 1 WHERE scope = ?"
+    )
     # Insert de tracing (keyspace tracing_ks, fora do keyspace do serviço).
     db["trace_insert"] = session.prepare(
         """
@@ -139,6 +143,11 @@ async def trace_middleware(request: Request, call_next):
 
         sess, ins = db.get("session"), db.get("trace_insert")
         if sess is not None and ins is not None:
+            # Total histórico (não expira): incrementa 'all' e o próprio serviço.
+            incr = db.get("count_incr")
+            if incr is not None:
+                sess.execute_async(incr, ("all",))
+                sess.execute_async(incr, (SERVICE_NAME,))
             sess.execute_async(ins, (
                 "all",
                 uuid_from_time(t_recv),

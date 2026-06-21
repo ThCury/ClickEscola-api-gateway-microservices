@@ -10,3 +10,4 @@ yarn-error.log
 .env.production
 .phpactor.json
 auth.json
+*.__pycache

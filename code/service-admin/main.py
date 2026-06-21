@@ -106,6 +106,13 @@ async def lifespan(app: FastAPI):
     db["count_service"] = session.prepare(
         "SELECT COUNT(*) FROM request_traces WHERE bucket = 'all' AND service = ? ALLOW FILTERING"
     )
+    # Contador persistente (sem TTL): total histórico de requisições.
+    db["count_read"] = session.prepare(
+        "SELECT total FROM request_counters WHERE scope = ?"
+    )
+    db["count_incr"] = session.prepare(
+        "UPDATE request_counters SET total = total + 1 WHERE scope = ?"
+    )
     # Insert para registrar requisições que falharam NO gateway (não chegam ao
     # serviço, então nenhum serviço as rastreia). O admin grava o trace aqui.
     db["trace_insert"] = session.prepare(
@@ -132,6 +139,11 @@ def _record_gateway_failure(service: str, method: str, status: int,
         return
     now = time.time()
     route = f"/api/{service}"
+    # Total histórico: a falha não chegou ao serviço, então o admin conta aqui.
+    incr = db.get("count_incr")
+    if incr is not None:
+        sess.execute_async(incr, ("all",))
+        sess.execute_async(incr, (service,))
     try:
         sess.execute_async(ins, (
             "all",
@@ -181,11 +193,16 @@ def config():
 
 @app.get("/api/stats")
 def stats():
-    """Estatísticas reais (não limitadas pelo tamanho da página da tabela)."""
+    """Estatísticas reais. O total é histórico (counter sem TTL), não a janela."""
     sess = db["session"]
-    total = sess.execute(db["count_all"]).one()[0]
-    alunos = sess.execute(db["count_service"], ("alunos",)).one()[0]
-    cursos = sess.execute(db["count_service"], ("cursos",)).one()[0]
+
+    def counter(scope: str) -> int:
+        row = sess.execute(db["count_read"], (scope,)).one()
+        return row[0] if row and row[0] is not None else 0
+
+    total = counter("all")
+    alunos = counter("alunos")
+    cursos = counter("cursos")
     # Médias sobre uma janela recente (suficiente e barato).
     window = list(sess.execute(db["select_traces"], (300,)))
     g2s = [r.gateway_to_service_ms for r in window if r.gateway_to_service_ms is not None]

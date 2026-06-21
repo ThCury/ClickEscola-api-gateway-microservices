@@ -59,6 +59,11 @@ export class TracingInterceptor implements NestInterceptor {
           const gwToSvcMs = gwMs !== null ? tRecv - gwMs : null;
           const totalMs = gwMs !== null ? tDone - gwMs : serviceMs;
 
+          // Total histórico (sem TTL): incrementa 'all' e o próprio serviço.
+          const COUNT = 'UPDATE tracing_ks.request_counters SET total = total + 1 WHERE scope = ?';
+          this.cassandra.client.execute(COUNT, ['all'], { prepare: true }).catch(() => {});
+          this.cassandra.client.execute(COUNT, [this.SERVICE], { prepare: true }).catch(() => {});
+
           this.cassandra.client
             .execute(
               TracingInterceptor.INSERT,

@@ -50,3 +50,12 @@ CREATE TABLE IF NOT EXISTS tracing_ks.request_traces (
 
 -- Garante a coluna mesmo se a tabela já existia de uma subida anterior.
 ALTER TABLE tracing_ks.request_traces ADD IF NOT EXISTS service_received_local text;
+
+-- ===== Contadores persistentes (total histórico de requisições) =====
+-- Diferente de request_traces (TTL de 1h), estes contadores NÃO expiram: somam
+-- toda a história. Incrementados pelos serviços (e pelo admin nas falhas do
+-- gateway). scope = 'all' | 'alunos' | 'cursos'.
+CREATE TABLE IF NOT EXISTS tracing_ks.request_counters (
+  scope text PRIMARY KEY,
+  total counter
+);

@@ -204,6 +204,21 @@ export default class ClickEscola extends React.Component {
     if (v == null) return '—'
     return (v < 10 ? v.toFixed(2) : v.toFixed(1)) + ' ms'
   }
+  // Abrevia números grandes: 1k, 1,5k, 2mi, 3bi, 4tri (pt-BR).
+  abbrev(n) {
+    if (n == null) return '—'
+    const neg = n < 0 ? '-' : ''
+    const a = Math.abs(n)
+    const units = [[1e12, 'tri'], [1e9, 'bi'], [1e6, 'mi'], [1e3, 'k']]
+    for (const [v, suf] of units) {
+      if (a >= v) {
+        const x = a / v
+        const s = (x >= 100 ? x.toFixed(0) : x.toFixed(1)).replace(/\.0$/, '').replace('.', ',')
+        return neg + s + suf
+      }
+    }
+    return neg + String(a)
+  }
   msColor(v) {
     if (v == null) return 'var(--muted)'
     if (v < 5) return 'var(--green)'
@@ -582,7 +597,7 @@ export default class ClickEscola extends React.Component {
       dirAStyle: S.direction === 'A' ? segActive : segIdle,
       dirBStyle: S.direction === 'B' ? segActive : segIdle,
 
-      kTotal: D.total.toLocaleString('pt-BR'),
+      kTotal: this.abbrev(D.total),
       kReqPerMin: D.reqPerMin,
       kAvgGw: this.fmtMs(D.avgGw),
       kAvgSvc: this.fmtMs(D.avgSvc),

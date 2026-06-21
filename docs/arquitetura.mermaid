@@ -2,30 +2,36 @@
 flowchart TD
     Client["Cliente<br/>browser / curl / Postman"]
 
-    subgraph Docker["Docker Network"]
+    subgraph Docker["Rede Docker (backend)"]
         Gateway["API Gateway — Nginx<br/>Ponto unico de entrada<br/>• Roteamento<br/>• Logs + tempo de resposta<br/>• Rate limiting<br/>• Tratamento de erro<br/>• X-Request-ID"]
 
-        subgraph Services["Microsservicos (FastAPI)"]
-            Alunos["Servico de Alunos<br/>REST /api/alunos"]
-            Cursos["Servico de Cursos<br/>REST /api/cursos"]
+        subgraph Services["Microsservicos (arquitetura poliglota)"]
+            Alunos["Servico de Alunos<br/>Python / FastAPI<br/>REST /api/alunos"]
+            Cursos["Servico de Cursos<br/>Node.js / NestJS<br/>REST /api/cursos"]
         end
 
-        subgraph DB["Cassandra (cluster)"]
+        subgraph DB["Cassandra (1 keyspace por servico)"]
             KSA[("alunos_ks")]
             KSC[("cursos_ks")]
         end
 
-        Dozzle["Dozzle<br/>Logs em tempo real"]
+        subgraph Obs["Observabilidade"]
+            Dozzle["Dozzle<br/>Logs crus em tempo real"]
+            Promtail["Promtail"]
+            Loki["Loki"]
+            Grafana["Grafana<br/>Dashboard de metricas"]
+        end
     end
 
-    Client -->|HTTP| Gateway
-    Gateway -->|"/api/alunos/"| Alunos
-    Gateway -->|"/api/cursos/"| Cursos
+    Client -->|"HTTP :8080"| Gateway
+    Gateway -->|"/api/alunos -> :8000"| Alunos
+    Gateway -->|"/api/cursos -> :3000"| Cursos
     Alunos --> KSA
     Cursos --> KSC
-    Dozzle -.observa logs.-> Gateway
-    Dozzle -.observa logs.-> Alunos
-    Dozzle -.observa logs.-> Cursos
+
+    Dozzle -.observa.-> Gateway
+    Promtail -.coleta logs.-> Gateway
+    Promtail --> Loki --> Grafana
 
     classDef gw fill:#2563eb,stroke:#1e40af,color:#fff
     classDef svc fill:#16a34a,stroke:#15803d,color:#fff
@@ -36,6 +42,6 @@ flowchart TD
     class Gateway gw
     class Alunos,Cursos svc
     class KSA,KSC db
-    class Dozzle obs
+    class Dozzle,Promtail,Loki,Grafana obs
     class Client ext
 ```

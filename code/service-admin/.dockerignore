@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+react-app/node_modules/
+react-app/front/
+front/
+static/

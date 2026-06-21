@@ -1,0 +1,12 @@
+# Carrega os dashboards do diretório montado — aparecem prontos ao abrir o Grafana.
+apiVersion: 1
+
+providers:
+  - name: ClickEscola
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

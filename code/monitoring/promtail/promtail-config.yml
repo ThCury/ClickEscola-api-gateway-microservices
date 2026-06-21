@@ -1,0 +1,62 @@
+# Promtail descobre os containers pelo Docker socket (igual o Dozzle),
+# lê o stdout de cada um e envia para o Loki. Para o gateway, faz parse
+# do log JSON do Nginx e extrai labels úteis (status, método, rota).
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Nome do container vira o label "container" (sem a barra inicial).
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: container
+    pipeline_stages:
+      # ----- Gateway: log JSON do Nginx -----
+      - match:
+          selector: '{container="gateway"}'
+          stages:
+            - json:
+                expressions:
+                  status: status
+                  method: method
+                  uri: uri
+                  request_id: request_id
+                  request_time: request_time
+                  upstream_response_time: upstream_response_time
+            # Extrai a rota (alunos/cursos) do início da URI.
+            - regex:
+                source: uri
+                expression: '^/api/(?P<rota>[a-z]+)'
+            # Labels de BAIXA cardinalidade (request_time NÃO vira label —
+            # é lido em tempo de query via `| json | unwrap request_time`).
+            - labels:
+                status:
+                method:
+                rota:
+
+      # ----- Serviços: linhas de trace (evt="trace") com os tempos gateway->serviço -----
+      - match:
+          selector: '{container=~"service-alunos|service-cursos"}'
+          stages:
+            - json:
+                expressions:
+                  evt: evt
+                  service: service
+                  status: status
+                  method: method
+            # Mantém só linhas de trace como métrica-friendly; demais seguem como log.
+            - labels:
+                service:
+                status:
+                method:

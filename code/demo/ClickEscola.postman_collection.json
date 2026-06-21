@@ -1,0 +1,88 @@
+{
+  "info": {
+    "name": "ClickEscola — API Gateway",
+    "description": "Coleção que exercita o gateway (http://localhost:8080) cobrindo os itens obrigatórios: roteamento, 2 serviços por entrada única, logs/tempo de resposta, comparação direto vs. gateway e tratamento de erro. Use a variável {{gateway}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "gateway", "value": "http://localhost:8080" },
+    { "key": "direto_cursos", "value": "http://localhost:3000" },
+    { "key": "aluno_id", "value": "" },
+    { "key": "curso_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "0. Health do gateway",
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{gateway}}/health", "host": ["{{gateway}}"], "path": ["health"] } }
+    },
+    {
+      "name": "1. Criar aluno (FastAPI)",
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "pm.test('201 Created', () => pm.response.code === 201);",
+          "const id = pm.response.json().id;",
+          "if (id) pm.collectionVariables.set('aluno_id', id);",
+          "console.log('X-Request-ID:', pm.response.headers.get('X-Request-ID'));"
+        ], "type": "text/javascript" } }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"nome\": \"Maria Silva\",\n  \"email\": \"maria@escola.edu\",\n  \"matricula\": \"2024001\"\n}" },
+        "url": { "raw": "{{gateway}}/api/alunos", "host": ["{{gateway}}"], "path": ["api", "alunos"] }
+      }
+    },
+    {
+      "name": "2. Listar alunos",
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{gateway}}/api/alunos", "host": ["{{gateway}}"], "path": ["api", "alunos"] } }
+    },
+    {
+      "name": "3. Buscar aluno por id",
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{gateway}}/api/alunos/{{aluno_id}}", "host": ["{{gateway}}"], "path": ["api", "alunos", "{{aluno_id}}"] } }
+    },
+    {
+      "name": "4. Criar curso (NestJS)",
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "pm.test('201 Created', () => pm.response.code === 201);",
+          "const id = pm.response.json().id;",
+          "if (id) pm.collectionVariables.set('curso_id', id);",
+          "console.log('X-Request-ID:', pm.response.headers.get('X-Request-ID'));"
+        ], "type": "text/javascript" } }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"nome\": \"Engenharia de Software\",\n  \"carga_horaria\": 3600\n}" },
+        "url": { "raw": "{{gateway}}/api/cursos", "host": ["{{gateway}}"], "path": ["api", "cursos"] }
+      }
+    },
+    {
+      "name": "5. Listar cursos",
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{gateway}}/api/cursos", "host": ["{{gateway}}"], "path": ["api", "cursos"] } }
+    },
+    {
+      "name": "6. Buscar curso por id",
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{gateway}}/api/cursos/{{curso_id}}", "host": ["{{gateway}}"], "path": ["api", "cursos", "{{curso_id}}"] } }
+    },
+    {
+      "name": "7. Acesso DIRETO ao cursos (requer override da porta)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "description": "Só funciona se a porta direta estiver exposta (demo override). Mostra que o acesso direto NÃO tem X-Request-ID nem passa pelo log/rate-limit do gateway.",
+        "url": { "raw": "{{direto_cursos}}/cursos", "host": ["{{direto_cursos}}"], "path": ["cursos"] }
+      }
+    },
+    {
+      "name": "8. Erro tratado (rode após 'docker stop service-cursos')",
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "pm.test('503 tratado pelo gateway', () => pm.response.code === 503);",
+          "pm.test('corpo JSON amigável', () => pm.response.json().error !== undefined);"
+        ], "type": "text/javascript" } }
+      ],
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{gateway}}/api/cursos", "host": ["{{gateway}}"], "path": ["api", "cursos"] } }
+    }
+  ]
+}

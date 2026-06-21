@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose *)",
+      "Bash(curl -s -X POST \"http://localhost:8090/api/loadtest?get=20&post=10&rate=12\")",
+      "Bash(python -c \"import sys,json;d=json.load\\(sys.stdin\\);print\\('total=%d ok=%d rate_limited_503=%d dur=%ss rps=%s'%\\(d['total_requests'],d['ok'],d['rate_limited_503'],d['duration_s'],d['rps']\\)\\);print\\('por serviço:',{k:v['by_status'] for k,v in d['by_service'].items\\(\\)}\\)\")",
+      "Bash(python -m py_compile service-admin/main.py)",
+      "Bash(curl -s http://localhost:8090/api/stats)",
+      "Bash(curl -s -o /dev/null http://localhost:8080/api/alunos)",
+      "Bash(curl -s -o /dev/null http://localhost:8080/api/cursos)",
+      "Bash(curl -s -o /dev/null -w 'HTTP %{http_code}\\\\n' http://localhost:8090/)",
+      "Bash(docker exec *)",
+      "Bash(docker version *)",
+      "Bash(echo \"=== EXIT: $? ===\")",
+      "Bash(curl -s http://localhost:8090/api/metrics)",
+      "Bash(python -c 'import sys,json;d=json.load\\(sys.stdin\\);s=d[\"series\"];print\\(\"loki_ok:\",d[\"loki_ok\"],\"| buckets:\",len\\(s[\"buckets\"]\\),\"| gateway:\",sum\\(s[\"gateway\"]\\),\"alunos:\",sum\\(s[\"alunos\"]\\),\"cursos:\",sum\\(s[\"cursos\"]\\),\"503:\",sum\\(s[\"rate_limited\"]\\)\\)')",
+      "Bash(curl -s http://localhost:8090/api/manage/alunos)",
+      "Bash(echo \"alunos: $\\(curl -s http://localhost:8090/api/manage/alunos)"
+    ]
+  }
+}

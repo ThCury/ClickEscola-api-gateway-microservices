@@ -2,6 +2,11 @@
 # Regra de ouro: apenas o gateway (Nginx) e o Dozzle expõem portas para o host.
 # Os serviços de aplicação só são acessíveis dentro da rede Docker "backend".
 
+# Nome do projeto (NÃO depende do nome da pasta "code"). Isola este stack do
+# docker de outros repositórios que também rodam a partir de uma pasta "code":
+# a rede vira "clickescola_backend" e os volumes "clickescola_*".
+name: clickescola
+
 services:
   # ---------- Fundação: banco de dados ----------
   cassandra:
@@ -82,7 +87,34 @@ services:
     networks:
       - backend
 
-  # ---------- Observabilidade: logs em tempo real ----------
+  # ---------- Painel de administração (FastAPI + frontend) ----------
+  # Lê o tracing do Cassandra, compara gateway x direto e dispara carga.
+  service-admin:
+    build: ./service-admin
+    container_name: service-admin
+    ports:
+      - "8090:8090" # Painel do administrador: http://localhost:8090
+    environment:
+      CASSANDRA_HOSTS: cassandra
+      CASSANDRA_PORT: "9042"
+      TRACING_KEYSPACE: tracing_ks
+      GATEWAY_URL: http://gateway
+      ALUNOS_URL: http://service-alunos:8000
+      CURSOS_URL: http://service-cursos:3000
+      LOKI_URL: http://loki:3100
+      GRAFANA_PUBLIC_URL: http://localhost:3001
+      DOZZLE_PUBLIC_URL: http://localhost:9999
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      cassandra-init:
+        condition: service_completed_successfully
+      loki:
+        condition: service_started
+    networks:
+      - backend
+
+  # ---------- Observabilidade 1: logs crus em tempo real ----------
   dozzle:
     image: amir20/dozzle:latest
     container_name: dozzle
@@ -93,9 +125,57 @@ services:
     networks:
       - backend
 
+  # ---------- Observabilidade 2: dashboard de métricas do gateway ----------
+  # Pipeline: Promtail lê os logs dos containers (Docker socket) -> Loki
+  # armazena -> Grafana exibe latência, throughput e status em tempo real.
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: loki
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    networks:
+      - backend
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: promtail
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    networks:
+      - backend
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    ports:
+      - "3001:3000" # Dashboard do gateway: http://localhost:3001
+    environment:
+      # Sem login: abre direto no dashboard durante a apresentação.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: dark
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - loki
+    networks:
+      - backend
+
 networks:
   backend:
     driver: bridge
 
 volumes:
   cassandra_data:
+  loki_data:
+  grafana_data:

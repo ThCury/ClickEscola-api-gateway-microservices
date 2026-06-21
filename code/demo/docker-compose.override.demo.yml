@@ -1,0 +1,13 @@
+# Override usado APENAS na demonstração de "acesso direto vs. gateway".
+# Expõe temporariamente a porta do service-cursos no host (localhost:3000)
+# para mostrar que o acesso direto NÃO tem rate limit, X-Request-ID nem log
+# centralizado. Não use em "produção" — quebra a regra de só o gateway expor porta.
+#
+#   Subir com a porta exposta:
+#     docker compose -f docker-compose.yml -f demo/docker-compose.override.demo.yml up -d service-cursos
+#   Restaurar (sem a porta):
+#     docker compose up -d service-cursos
+services:
+  service-cursos:
+    ports:
+      - "3000:3000"

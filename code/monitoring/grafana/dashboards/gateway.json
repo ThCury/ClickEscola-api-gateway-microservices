@@ -1,0 +1,249 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Requisições no período",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "sum(count_over_time({container=\"gateway\"} |= \"request_id\" [$__range]))"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Erros 5xx no período",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "sum(count_over_time({container=\"gateway\", status=~\"5..\"} [$__range]))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Latência p95 (atual)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.5 }, { "color": "red", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "quantile_over_time(0.95, {container=\"gateway\"} | json | __error__=\"\" | unwrap request_time [$__range])"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Status mais recente",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "editorMode": "code",
+          "queryType": "instant",
+          "expr": "sum by (status) (count_over_time({container=\"gateway\", status=~\".+\"} [1m]))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Throughput por rota (req/s)",
+      "description": "Quantas requisições por segundo o gateway está roteando para cada serviço.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 20, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "editorMode": "code",
+          "legendFormat": "{{rota}}",
+          "expr": "sum by (rota) (rate({container=\"gateway\", rota=~\".+\"} [1m]))"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Latência através do gateway (s)",
+      "description": "request_time = tempo total (cliente→gateway→serviço→cliente). p50 e p95.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 10, "showPoints": "auto" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "editorMode": "code",
+          "legendFormat": "p50",
+          "expr": "quantile_over_time(0.50, {container=\"gateway\"} | json | __error__=\"\" | unwrap request_time [1m])"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "editorMode": "code",
+          "legendFormat": "p95",
+          "expr": "quantile_over_time(0.95, {container=\"gateway\"} | json | __error__=\"\" | unwrap request_time [1m])"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Status HTTP (req/s)",
+      "description": "Picos de 503 aparecem aqui durante a demo de rate limit e de serviço fora do ar.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "bars", "fillOpacity": 70, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never" },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "editorMode": "code",
+          "legendFormat": "HTTP {{status}}",
+          "expr": "sum by (status) (rate({container=\"gateway\", status=~\".+\"} [1m]))"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "logs",
+      "title": "Logs do gateway (ao vivo)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": true,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "editorMode": "code",
+          "expr": "{container=\"gateway\"} | json"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["clickescola", "gateway"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "API Gateway — ClickEscola (tempo real)",
+  "uid": "clickescola-gw",
+  "version": 1,
+  "weekStart": ""
+}

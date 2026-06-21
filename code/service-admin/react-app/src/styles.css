@@ -1,0 +1,69 @@
+/* ===== Tema: variáveis trocadas via [data-theme] no wrapper ===== */
+:root,
+[data-theme='dark'] {
+  --bg: #0b1020;
+  --bg2: #18233f;
+  --panel: #141b2e;
+  --panel2: #1b2540;
+  --line: #283353;
+  --txt: #e6ecff;
+  --muted: #8ea0c8;
+  --blue: #60a5fa;
+  --green: #34d399;
+  --purple: #c084fc;
+  --orange: #fbbf24;
+  --red: #f87171;
+  --cyan: #22d3ee;
+  --grid: rgba(142, 160, 200, 0.16);
+}
+
+[data-theme='light'] {
+  --bg: #eef2fb;
+  --bg2: #dde6fb;
+  --panel: #ffffff;
+  --panel2: #f3f6fd;
+  --line: #dbe2f0;
+  --txt: #152038;
+  --muted: #5b6b88;
+  --blue: #2563eb;
+  --green: #0d9f6e;
+  --purple: #9333ea;
+  --orange: #c2780c;
+  --red: #dc2626;
+  --cyan: #0891b2;
+  --grid: rgba(70, 90, 140, 0.14);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* hover de linha da tabela (não dá pra fazer só com inline style) */
+.ce-row:hover {
+  background: var(--panel2);
+}
+
+@keyframes ce-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 9px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}

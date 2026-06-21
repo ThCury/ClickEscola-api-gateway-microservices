@@ -30,12 +30,7 @@ export class CursosService {
   }
 
   async findOne(id: string) {
-    let uid: types.Uuid;
-    try {
-      uid = types.Uuid.fromString(id);
-    } catch {
-      throw new NotFoundException(`Curso ${id} não encontrado`);
-    }
+    const uid = this.parseId(id);
 
     const result = await this.cassandra.client.execute(
       'SELECT id, nome, carga_horaria FROM cursos WHERE id = ?',
@@ -52,5 +47,34 @@ export class CursosService {
       nome: row.nome,
       carga_horaria: row.carga_horaria,
     };
+  }
+
+  async update(id: string, dto: CreateCursoDto) {
+    await this.findOne(id); // 404 se não existir
+    const uid = this.parseId(id);
+    await this.cassandra.client.execute(
+      'UPDATE cursos SET nome = ?, carga_horaria = ? WHERE id = ?',
+      [dto.nome, dto.carga_horaria, uid],
+      { prepare: true },
+    );
+    return { id, nome: dto.nome, carga_horaria: dto.carga_horaria };
+  }
+
+  async remove(id: string) {
+    await this.findOne(id); // 404 se não existir
+    const uid = this.parseId(id);
+    await this.cassandra.client.execute(
+      'DELETE FROM cursos WHERE id = ?',
+      [uid],
+      { prepare: true },
+    );
+  }
+
+  private parseId(id: string): types.Uuid {
+    try {
+      return types.Uuid.fromString(id);
+    } catch {
+      throw new NotFoundException(`Curso ${id} não encontrado`);
+    }
   }
 }
